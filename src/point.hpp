@@ -6,20 +6,19 @@ using namespace std;
 #ifndef POINT_HPP
 #define POINT_HPP
 /**
- * @brief A point in 2D space
- *
- * @param d Number of dimensions
- * @param v d-dimensional vector the values of the point
+ * @brief A d-dimensional point
+ * @param v d-dimensional vector with the values of each dimension
  */
 class Point {
 public:
-    int d;
     vector<double> v;
 
     Point();
     Point(vector<double>);
     ~Point();
     friend ostream& operator<<(ostream& os, const Point& p);
+    bool operator==(const Point& otherPoint) const;
+    struct HashFunction {};
 };
 
 vector<Point> generate_points(int, int);

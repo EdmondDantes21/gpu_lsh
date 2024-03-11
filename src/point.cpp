@@ -1,16 +1,14 @@
-#include "point.hpp"
 #include <vector>
 #include <math.h>
+#include "point.hpp"
 
 using namespace std;
 
 Point::Point(vector<double> v) {
-    this->d = v.size();
     this->v = v;
 }
 
 Point::Point() {
-    this->d = 0;
     this->v = vector<double>(0);
 }
 
@@ -23,6 +21,28 @@ ostream &operator<<(ostream &os, const Point &p) {
     os << "}";
     return os;
 }
+/**
+ * @brief Overload of the operator == used for making the class Point hashable
+ * 
+ * @param other is the point to compare
+ * @return true if the two points are equal
+ * @return false otherwise
+ */
+bool Point::operator==(const Point& other) const {
+    return this->v == other.v;
+}
+
+/**
+ * @brief Wrapper class for the hash function definition for a Point
+ */
+struct HashFunction {
+    size_t operator()(const Point& point) const {
+        size_t seed = point.v.size();
+        for (auto & d : point.v) 
+            seed ^= hash<double>()(d) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+        return seed;
+    }
+};
 
 /**
  * @brief Generate n d-dimensional points uniformally distributed across all dimensions
@@ -57,7 +77,7 @@ vector<Point> generate_points(int n, int d) {
  */
 double dist(const Point& p1, const Point& p2) {
     double sum = 0.0;
-    for (int i = 0; i < p1.d; i++)
+    for (int i = 0; i < p1.v.size(); i++)
         sum += pow((p1.v[i] - p2.v[i]), 2);
     return sqrt(sum);
 }
