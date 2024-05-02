@@ -33,11 +33,6 @@ Index::~Index() {}
  * @brief Add a point to the index
  */
 void Index::add(Point &p) {
-    cout << "signature of " << p << " = ";
-    vector<bool> sig = signature(p);
-    for (int i = 0; i < sig.size(); i++)
-        cout << sig[i] << " ";
-    cout << endl;
     this->map[signature(p)].insert(p);
 }
 
@@ -47,12 +42,30 @@ void Index::add(Point &p) {
  * @param points Is the vector of points to add
 */
 void Index::add(vector<Point>& points) {
-    // for (int i = 0; i < points.size(); i++)
-    //     this->map[signature(points[i])].insert(points[i]);
+    for (auto &p : points)
+        add(p);
 }
 
-void Index::search(Point& p) {
+/**
+ * @brief Search and return the most similar point to p
+*/
+optional<Point> Index::search(Point& p) {
+    Point closest_point;
+    double min_dist = __DBL_MAX__;
+    bool found_one_point = false;
 
+    for (auto & point : this->map[signature(p)]) {
+        double distance = dist(point, p);
+        if (distance < min_dist) {
+            min_dist = distance;
+            closest_point = point;
+            found_one_point = true;
+        }
+    }
+    
+    if (found_one_point)    
+        return closest_point;
+    return nullopt;
 }
 
 void Index::print() {
@@ -83,17 +96,6 @@ vector<bool> Index::signature(const Point& p) {
         sig[i] = inner_product(p.v.begin(), p.v.end(), this->hyperplanes[i].begin(), 0.0) > 0 ? 1 : 0;
     return sig;
 }
-
-/**
- * @brief Wrapper class that contains a method to hash a vector of bools
- */
-// struct VectorBoolHash {
-//     size_t operator()(const vector<bool>& obj) const {
-//         size_t hash = 0;
-//         return hash;
-//         // return hash<vector<bool>>()(obj);
-//     }
-// };
 
 /**
  * @brief Wrapper class that contains a method to compare to vectors of bools

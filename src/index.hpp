@@ -1,5 +1,6 @@
 #include <unordered_map>
 #include <unordered_set>
+#include <optional>
 #include "point.hpp"
 
 using namespace std;
@@ -21,7 +22,7 @@ public:
     ~Index();
     void add(Point&);
     void add(vector<Point>&);
-    void search(Point&);
+    optional<Point> search(Point&);
     void print();
 
     struct VectorBoolHash {
