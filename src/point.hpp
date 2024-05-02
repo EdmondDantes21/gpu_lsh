@@ -18,7 +18,15 @@ public:
     ~Point();
     friend ostream& operator<<(ostream& os, const Point& p);
     bool operator==(const Point& otherPoint) const;
-    struct HashFunction {};
+    
+    struct HashFunction {
+        size_t operator()(const Point& point) const {
+            size_t seed = point.v.size();
+            for (auto & d : point.v) 
+                seed ^= hash<double>()(d) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            return seed;
+        }
+    };
 };
 
 vector<Point> generate_points(int, int);

@@ -22,9 +22,9 @@ Index::Index() {
  * @param nbits Number of random hyperplanes
  */
 Index::Index(int d, int nbits) {
-    this->d = 2;
-    this->nbits = 32;
-    this->hyperplanes = generate_hyperplanes(2, 32);
+    this->hyperplanes = generate_hyperplanes(d, nbits);
+    this->d = d;
+    this->nbits = nbits;
 }
 
 Index::~Index() {}
@@ -33,11 +33,43 @@ Index::~Index() {}
  * @brief Add a point to the index
  */
 void Index::add(Point &p) {
+    cout << "signature of " << p << " = ";
+    vector<bool> sig = signature(p);
+    for (int i = 0; i < sig.size(); i++)
+        cout << sig[i] << " ";
+    cout << endl;
+    this->map[signature(p)].insert(p);
+}
 
+/**
+ * @brief add a vector of points to the index
+ * 
+ * @param points Is the vector of points to add
+*/
+void Index::add(vector<Point>& points) {
+    // for (int i = 0; i < points.size(); i++)
+    //     this->map[signature(points[i])].insert(points[i]);
 }
 
 void Index::search(Point& p) {
 
+}
+
+void Index::print() {
+    for (auto it = this->map.begin(); it != this->map.end(); it++) {
+        cout << "KEY = ";
+        for (int i = 0; i < it->first.size(); i++)
+            cout << it->first[i] << " ";
+        cout << endl;
+
+        int i = 0;
+        for (auto &point : it->second) {
+            cout << "point " << i++ << endl;
+            for (int i = 0; i < point.v.size(); i++) 
+                cout << point.v[i] << " ";
+            cout << endl;
+        }
+    }
 }
 
 /**
@@ -48,18 +80,20 @@ void Index::search(Point& p) {
 vector<bool> Index::signature(const Point& p) {
     vector<bool> sig(nbits);
     for (int i = 0; i < nbits; i++) 
-        sig[i] = inner_product(p.v.begin(), p.v.end(), this->hyperplanes[i].begin(), 0.0);
+        sig[i] = inner_product(p.v.begin(), p.v.end(), this->hyperplanes[i].begin(), 0.0) > 0 ? 1 : 0;
     return sig;
 }
 
 /**
  * @brief Wrapper class that contains a method to hash a vector of bools
  */
-struct VectorBoolHash {
-    size_t operator()(const vector<bool>& obj) const {
-        return hash<vector<bool>>()(obj);
-    }
-};
+// struct VectorBoolHash {
+//     size_t operator()(const vector<bool>& obj) const {
+//         size_t hash = 0;
+//         return hash;
+//         // return hash<vector<bool>>()(obj);
+//     }
+// };
 
 /**
  * @brief Wrapper class that contains a method to compare to vectors of bools

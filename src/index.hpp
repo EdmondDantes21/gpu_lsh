@@ -1,6 +1,5 @@
 #include <unordered_map>
 #include <unordered_set>
-#include <set>
 #include "point.hpp"
 
 using namespace std;
@@ -21,9 +20,21 @@ public:
     Index(int, int);
     ~Index();
     void add(Point&);
+    void add(vector<Point>&);
     void search(Point&);
-    struct VectorBoolHash {};
-    struct VectorBoolEqual {};  
+    void print();
+
+    struct VectorBoolHash {
+        size_t operator()(const vector<bool>& obj) const {
+            return hash<vector<bool>>()(obj);
+        }
+    };
+
+    struct VectorBoolEqual {
+        bool operator()(const vector<bool>& lhs, const vector<bool>& rhs) const {
+            return lhs == rhs;
+        }
+    };
 private:
     int d;
     int nbits;

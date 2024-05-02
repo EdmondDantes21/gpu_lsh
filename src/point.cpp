@@ -33,18 +33,6 @@ bool Point::operator==(const Point& other) const {
 }
 
 /**
- * @brief Wrapper class for the hash function definition for a Point
- */
-struct HashFunction {
-    size_t operator()(const Point& point) const {
-        size_t seed = point.v.size();
-        for (auto & d : point.v) 
-            seed ^= hash<double>()(d) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-        return seed;
-    }
-};
-
-/**
  * @brief Generate n d-dimensional points uniformally distributed across all dimensions
  *
  * @param n number of points to generate
