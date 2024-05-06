@@ -1,4 +1,6 @@
 #include <vector>
+#include <unordered_map>
+#include <unordered_set>
 #include <optional>
 #include <stdint.h> // for the log2 function
 #include <unistd.h> // For sleep function
@@ -48,9 +50,19 @@ Index_CPU::~Index_CPU() {}
  * @param start Starting index of the slice (included)
  * @param end Ending index of the slice (exluded)
 */
-void Index_CPU::add(vector<Point>& points, int start, int end){
-    while (start != end)
-        add(points[start++]);
+void Index_CPU::add(vector<Point>& points, int start, int end) {
+    while (start < end)
+        Index::add(points[start++]);
+}
+/**
+ * @brief copy contents of index i2 to index i1
+ * 
+ * @param i1 The destination index
+ * @param i2 The source index
+*/
+void Index_CPU::merge(Index_CPU& i1, Index_CPU& i2) {
+    for (auto& entry : i2.map)
+        i1.map[entry.first].insert(entry.second.begin(), entry.second.end());
 }
 
 /**
@@ -68,12 +80,19 @@ void Index_CPU::add(vector<Point>& points) {
         int slice_size = points.size() / n_threads;
         bool active = true;
 
-        indexes[thread_id].add(points, thread_id * slice_size, thread_id * slice_size * 2); // add points to the local index
-        #pragma omp barrier
+        if (thread_id == 0)
+            add(points, thread_id * slice_size, thread_id * slice_size + slice_size);
+        else
+            indexes[thread_id].add(points, thread_id * slice_size, thread_id * slice_size + slice_size); // add points to the local index
         
-        while (active && iterations != 0) {
+        #pragma omp barrier
+
+        while (iterations != 0) {
             if (active && new_index % 2 == 0) {
-                merge(indexes[thread_id], indexes[new_index * 2]);
+                if (thread_id == 0)
+                    merge(*this, indexes[thread_id + jump]);
+                else
+                    merge(indexes[thread_id], indexes[thread_id + jump]);
                 new_index /= 2;
             }   
             iterations--;  
@@ -82,10 +101,6 @@ void Index_CPU::add(vector<Point>& points) {
             #pragma omp barrier
         }
     }
-}
-
-void Index_CPU::merge(Index_CPU& i1, Index_CPU& i2) {
-
 }
 
 optional<Point> Index_CPU::search(Point& p) {
