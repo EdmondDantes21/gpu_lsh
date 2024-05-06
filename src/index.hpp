@@ -30,13 +30,12 @@ public:
             return hash<vector<bool>>()(obj);
         }
     };
-
     struct VectorBoolEqual {
         bool operator()(const vector<bool>& lhs, const vector<bool>& rhs) const {
             return lhs == rhs;
         }
     };
-private:
+    
     int d;
     int nbits;
     unordered_map<vector<bool>, unordered_set<Point, Point::HashFunction>, VectorBoolHash, VectorBoolEqual> map;
