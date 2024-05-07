@@ -1,13 +1,10 @@
 CC = g++
-CFLAGS = -std=c++14 -O3
+CFLAGS = -fopenmp
+TARGET = lsh
+SRCS = lsh.cpp index.cpp point.cpp index_CPU.cpp
 
-SRCS = lsh.cpp point.cpp
-OBJS = $(SRCS:.cpp=.o)
-
-all: lsh
-
-lsh: $(OBJS)
-	$(CC) $(CFLAGS) -o $@ $(OBJS)
+$(TARGET): $(SRCS)
+	$(CC) $(CFLAGS) $(SRCS) -o $(TARGET)
 
 clean:
-	rm -f $(OBJS) lsh
+	rm -f $(TARGET)
