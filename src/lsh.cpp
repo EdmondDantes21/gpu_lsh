@@ -8,7 +8,7 @@
 using namespace std;
 
 #define DIMENSIONS 4
-#define N_HYPERPLANES 128
+#define N_HYPERPLANES 32
 
 void print_usage();
 
@@ -20,36 +20,44 @@ int main(int argc, char** argv) {
     
     // SERIAL VERSION ON CPU
     if (argv[1] == string("-serial")) {
+        cout << "INSERT\n";
         cout << "n_points \t time_usec \t time_sec\n";
         struct timeval start, end;
-        for (int n_points = 1 << 10; n_points <= 1 << 20; n_points *= 2) {
-            gettimeofday(&start, NULL);
-            
+        for (int n_points = 1 << 10; n_points <= 1 << 22; n_points *= 2) {
             vector<Point> points = generate_points(n_points, DIMENSIONS);
+            
+            gettimeofday(&start, NULL);
             Index index = Index(DIMENSIONS, N_HYPERPLANES);
             index.add(points);
-            
             gettimeofday(&end, NULL);
+            
             long long int time_usec = ((end.tv_sec * 1000000 + end.tv_usec) - (start.tv_sec * 1000000 + start.tv_usec));
             cout << n_points << " \t " << time_usec << " \t " << time_usec / 1000000.0 << endl;
         }
+        cout << "SEARCH\n";
+        for (int n_points = 1 << 10; n_points <= 1 << 20; n_points *=2) {
+            gettimeofday(&start, NULL);
+            
+            gettimeofday(&end, NULL);
+        }
+
     }
 
     // PARALLEL VERSION ON CPU
     if (argc == 3 && argv[1] == string("-openmp")) {
         int threads = atoi(argv[2]);
-        cout << "n_points \t time_usec \t time_sec\n";
+        cout << "n_points \t time[s]\n";
         struct timeval start, end;
-        for (int n_points = 1 << 10; n_points <= 1 << 20; n_points *= 2) {
-            gettimeofday(&start, NULL);
-            
+        for (int n_points = 1 << 10; n_points <= 1 << 22; n_points *= 2) {
             vector<Point> points = generate_points(n_points, DIMENSIONS);
+            
+            gettimeofday(&start, NULL);
             Index_CPU index = Index_CPU(DIMENSIONS, N_HYPERPLANES, threads);
             index.add(points);
-
             gettimeofday(&end, NULL);
+
             long long int time_usec = ((end.tv_sec * 1000000 + end.tv_usec) - (start.tv_sec * 1000000 + start.tv_usec));
-            cout << n_points << " \t " << time_usec << " \t " << time_usec / 1000000.0 << endl;
+            cout << n_points << "\t\t" << time_usec / 1000000.0 << endl;
         }
     }
     return 0;
@@ -60,7 +68,7 @@ void print_usage() {
     cout << "Usage: ./lsh [OPTION] [THREADS]\n";
     
     cout << "OPTION:\n";
-    cout << "\t -procedural \t Procedural CPU version\n";
+    cout << "\t -serial \t serial CPU version\n";
     cout << "\t -openmp \t Parallel OpenMP implementation\n\n";
 
     cout << "THREADS: number of threads to spawn in the openmp option\n";

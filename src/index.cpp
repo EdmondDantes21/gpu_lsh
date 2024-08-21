@@ -48,13 +48,15 @@ void Index::add(vector<Point>& points) {
 
 /**
  * @brief Search and return the most similar point to p
+ * 
+ * @return The closest point if it is found, nullopt otherwise
 */
 optional<Point> Index::search(Point& p) {
     Point closest_point;
     double min_dist = __DBL_MAX__;
     bool found_one_point = false;
 
-    for (auto & point : this->map[signature(p)]) {
+    for (auto& point : this->map[signature(p)]) {
         double distance = dist(point, p);
         if (distance < min_dist) {
             min_dist = distance;
