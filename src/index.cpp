@@ -70,6 +70,9 @@ optional<Point> Index::search(Point& p) {
     return nullopt;
 }
 
+/**
+ * @brief Print all points in the index
+ */
 void Index::print() {
     for (auto it = this->map.begin(); it != this->map.end(); it++) {
         cout << "KEY = ";

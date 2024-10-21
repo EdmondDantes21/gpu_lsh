@@ -17,7 +17,7 @@ public:
     ~Index_CPU();
     Index_CPU(int, int, int);
     void add(vector<Point>&);
-    optional<Point> search(Point&);
+    vector<optional<Point>> search(vector<Point>&);
 private:
     int n_threads;
     void add(vector<Point>&, int, int);

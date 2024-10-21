@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <sys/time.h>
+#include <iomanip>
 #include "point.hpp"
 #include "index.hpp"
 #include "index_CPU.hpp"
@@ -8,7 +9,8 @@
 using namespace std;
 
 #define DIMENSIONS 4
-#define N_HYPERPLANES 32
+#define N_HYPERPLANES 128
+#define N 1 << 19
 
 void print_usage();
 
@@ -21,9 +23,9 @@ int main(int argc, char** argv) {
     // SERIAL VERSION ON CPU
     if (argv[1] == string("-serial")) {
         cout << "INSERT\n";
-        cout << "n_points \t time_usec \t time_sec\n";
+        cout << "n_points" << setw(20) << "time[s]\n";
         struct timeval start, end;
-        for (int n_points = 1 << 10; n_points <= 1 << 22; n_points *= 2) {
+        for (int n_points = 1 << 10; n_points <= N; n_points *= 2) {
             vector<Point> points = generate_points(n_points, DIMENSIONS);
             
             gettimeofday(&start, NULL);
@@ -32,13 +34,29 @@ int main(int argc, char** argv) {
             gettimeofday(&end, NULL);
             
             long long int time_usec = ((end.tv_sec * 1000000 + end.tv_usec) - (start.tv_sec * 1000000 + start.tv_usec));
-            cout << n_points << " \t " << time_usec << " \t " << time_usec / 1000000.0 << endl;
+            cout << right << setw(10) << n_points << "\t"
+            << fixed << setprecision(6) << setw(20) << time_usec / 1000000.0 << endl;
         }
+        
         cout << "SEARCH\n";
-        for (int n_points = 1 << 10; n_points <= 1 << 20; n_points *=2) {
+        cout << "n_points" << setw(20) << "time[s]\n";
+
+        Index index = Index(DIMENSIONS, N_HYPERPLANES);
+        vector<Point> points = generate_points(N, DIMENSIONS);
+        index.add(points);
+
+        for (int n_points = 1 << 10; n_points <= N; n_points *=2) {
+            vector<Point> points_to_search = generate_points(n_points, DIMENSIONS);
             gettimeofday(&start, NULL);
             
+            for (auto& p : points_to_search)
+                index.search(p);
+            
             gettimeofday(&end, NULL);
+
+            long long int time_usec = ((end.tv_sec * 1000000 + end.tv_usec) - (start.tv_sec * 1000000 + start.tv_usec));
+            cout << right << setw(10) << n_points << "\t"
+            << fixed << setprecision(6) << setw(20) << time_usec / 1000000.0 << endl;
         }
 
     }
@@ -46,9 +64,10 @@ int main(int argc, char** argv) {
     // PARALLEL VERSION ON CPU
     if (argc == 3 && argv[1] == string("-openmp")) {
         int threads = atoi(argv[2]);
-        cout << "n_points \t time[s]\n";
+        cout << "INSERT\n";
+        cout << "n_points" << setw(15) << "time[s]\n";
         struct timeval start, end;
-        for (int n_points = 1 << 10; n_points <= 1 << 22; n_points *= 2) {
+        for (int n_points = 1 << 10; n_points <= N; n_points *= 2) {
             vector<Point> points = generate_points(n_points, DIMENSIONS);
             
             gettimeofday(&start, NULL);
@@ -57,10 +76,32 @@ int main(int argc, char** argv) {
             gettimeofday(&end, NULL);
 
             long long int time_usec = ((end.tv_sec * 1000000 + end.tv_usec) - (start.tv_sec * 1000000 + start.tv_usec));
-            cout << n_points << "\t\t" << time_usec / 1000000.0 << endl;
+            cout << right << setw(10) << n_points << "\t"
+            << fixed << setprecision(6) << setw(20) << time_usec / 1000000.0 << endl;
+        }
+
+        cout << "SEARCH\n";
+        cout << "n_points" << setw(15) << "time[s]\n";
+
+        Index_CPU index = Index_CPU(DIMENSIONS, N_HYPERPLANES, threads);
+        vector<Point> points = generate_points(N, DIMENSIONS);
+        index.add(points);
+
+        for (int n_points = 1 << 10; n_points <= N; n_points *=2) {
+            vector<Point> points_to_search = generate_points(n_points, DIMENSIONS);
+
+            gettimeofday(&start, NULL);
+            vector<optional<Point>> search_result = index.search(points_to_search);
+            gettimeofday(&end, NULL);
+
+            long long int time_usec = ((end.tv_sec * 1000000 + end.tv_usec) - (start.tv_sec * 1000000 + start.tv_usec));
+            cout << right << setw(10) << n_points << "\t"
+            << fixed << setprecision(6) << setw(20) << time_usec / 1000000.0 << endl;
         }
     }
     return 0;
+
+    // TODO: PARALLEL VERSION ON GPU
 }
 
 

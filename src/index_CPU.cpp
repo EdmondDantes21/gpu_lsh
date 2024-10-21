@@ -70,7 +70,6 @@ void Index_CPU::merge(Index_CPU& i1, Index_CPU& i2) {
 */
 void Index_CPU::add(vector<Point>& points) {
     vector<Index_CPU> indexes(n_threads, Index_CPU(this->d, this->nbits, this->n_threads)); // create one empty index per thread
-
     #pragma omp parallel num_threads(n_threads)
     {
         int thread_id = omp_get_thread_num();
@@ -102,8 +101,23 @@ void Index_CPU::add(vector<Point>& points) {
         }
     }
 }
+/**
+ * @brief given a point p, return the most similar point to p
+ * 
+ * @return Vector of closest points. The corresponding entry contains nullopt when the point is not found
+ */
+vector<optional<Point>> Index_CPU::search(vector<Point>& points) {
+    vector<optional<Point>> result(points.size());
+    int slice_size = points.size() / n_threads;
 
-optional<Point> Index_CPU::search(Point& p) {
-    return nullopt;
+    // each thread searches an equal portion of the points in input and puts the result in its vector
+    #pragma omp parallel num_threads(n_threads)
+    {
+        int thread_id = omp_get_thread_num();       
+        for (int i = thread_id * slice_size; i < thread_id * slice_size + slice_size; i++) 
+            result[i] = Index::search(points[i]);
+    }
+    #pragma omp barrier
+
+    return result;
 }
-

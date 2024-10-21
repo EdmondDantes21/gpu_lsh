@@ -21,6 +21,7 @@ ostream &operator<<(ostream &os, const Point &p) {
     os << "}";
     return os;
 }
+
 /**
  * @brief Overload of the operator == used for making the class Point hashable
  * 
