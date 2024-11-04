@@ -191,7 +191,7 @@ int main() {
     CHECK_CUDA(cudaMemcpyToSymbol(prime, &h_prime, sizeof(unsigned long long int)));
 
     // increase heap size to allow for dinamic allocation
-    size_t heapSize = 32* 1024 * 1024; // 32 MB
+    size_t heapSize = 1024 * 1024 * 1024; // 1 GB
     CHECK_CUDA(cudaDeviceSetLimit(cudaLimitMallocHeapSize, heapSize));
 
     int number_of_blocks = 32, threads_per_block = 64;
