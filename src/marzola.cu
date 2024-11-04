@@ -1,4 +1,5 @@
 #include <iostream>
+#include <omp.h>
 #include <random>
 #include <cuda_runtime.h>
 #include "point_gpu.hpp"
@@ -23,19 +24,19 @@ __device__ __forceinline__ unsigned int hash_signature(unsigned long long int ke
 }
 
 /**
- * @brief twice the bucket capacity
+ * @brief double the bucket capacity
  * @param bucket is a pointer to the bucket
  * @param current_size is the current size of the bucket
  */
-__device__ void resize(int **bucket, int current_size) {
+__device__ void resize(int **bucket, unsigned int current_size) {
     // allocate new bucket with twice the size as the old one (requires compute capability of 3.0 or above)
     int *new_bucket = (int*) malloc(current_size * 2 * sizeof(int));
 
     // copy data from old bucket to new bucket
     for(int i = 0; i < current_size; i++)
-        new_bucket[i] = *(bucket)[i];
+        new_bucket[i] = (*bucket)[i];
     
-    cudaFree(*bucket);   // free old bucket memory
+    free(*bucket);   // free old bucket memory
     *bucket = new_bucket; // bucket now points to the new bucket data
 }
 
@@ -63,20 +64,23 @@ __device__ unsigned long long int signature_gpu(float* points, int point_number)
     return sig;
 }
 
-__global__ void add_device(float *points, int **buckets, unsigned long long int *signatures, unsigned int *bucket_size, int n) {
+__global__ void add_device(float *points, int **buckets, unsigned long long int *signatures, unsigned int *curr_bucket_used, int n) {
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
     int thread_count = gridDim.x * blockDim.x;
-    
+
     for (int i = tid; i < n; i += thread_count) {
         signatures[i] = signature_gpu(points, i);  // calculate point signature, i.e. whether it is left/right of each hyperplane
-        unsigned int bucket_index = (hash_signature(signatures[i]) & ((n-1) / thread_count)) + n / thread_count * tid ; // bucket index indicates in which bucket to put this point. Note that we store the index of the point rather than the point itself
-    
-        if (bucket_size[bucket_index] >= BUCKET_SIZE && is_power_of_two(bucket_size[bucket_index])) // each time a bucket is full we double its capacity
-            resize(&buckets[bucket_index], bucket_size[bucket_index]);
-        buckets[bucket_index][bucket_size[bucket_index]] = i; // put the index of the i-th point in the right bucket
-        bucket_size[bucket_index]++;
+        unsigned int bucket_index = (hash_signature(signatures[i]) % (n / thread_count)) + n / thread_count * tid ; // bucket index indicates in which bucket to put this point. Note that we store the index of the point rather than the point itself
+        
+        if (curr_bucket_used[bucket_index] >= BUCKET_SIZE && is_power_of_two(curr_bucket_used[bucket_index])) { // each time a bucket is full we double its capacity
+            resize(&buckets[bucket_index], curr_bucket_used[bucket_index]);
+        }
+
+        buckets[bucket_index][curr_bucket_used[bucket_index]] = i; // put the index of the i-th point in the right bucket
+        curr_bucket_used[bucket_index]++;
     }
 }
+
 
 /**
  * @brief search n points in the index
@@ -112,13 +116,17 @@ float *generate_random_hyperplanes(int d, int nbits) {
 
 float* generate_random_points() {
     float * points = new float[N * DIMENSIONS];
-
+    
     srand(time(NULL));
     const float lower_bound = -1000.0;
     const float upper_bound = 1000.0;
     
-    for (int i = 0; i < N * DIMENSIONS; i++) {
-        points[i] = lower_bound + (upper_bound - lower_bound) * ((float) rand() / RAND_MAX);
+    #pragma omp parallel num_threads(4)
+    {
+        #pragma omp parallel for
+        for (int i = 0; i < N * DIMENSIONS; i++) {
+            points[i] = lower_bound + (upper_bound - lower_bound) * ((float) rand() / RAND_MAX);
+        }
     }
     return points;
 }
@@ -157,36 +165,49 @@ int main() {
     /* POINTERS TO HOST */
 
     /* POINTERS TO DEVICE */
-    int **d_buckets; // buckets containing the indexes of the points
-    unsigned long long int *d_signatures;              // signatures of each point
-    unsigned int *d_bucket_size;             // currently used size of each bucket
-    //float* d_hyperplanes;           // points to the random hyperplanes on device
-    float *d_points;                // points stored on the device
+    int **d_buckets;                        // buckets containing the indexes of the points
+    unsigned long long int *d_signatures;   // signatures of each point
+    unsigned int *d_bucket_size;            // currently used size of each bucket
+    float *d_points;                        // points stored on the device
     /* POINTERS TO DEVICE*/
 
     /* ALLOCATE MEMORY ON DEVICE */
-    cudaFree(0);
+    CHECK_CUDA(cudaFree(0)); // Reset the device
 
     // upload points to device global memory
-    cudaMalloc((void**)&d_points, N * DIMENSIONS * sizeof(float));
-    cudaMemcpy(d_points, h_points, N * DIMENSIONS * sizeof(float), cudaMemcpyHostToDevice);
+    CHECK_CUDA(cudaMalloc((void**)&d_points, N * DIMENSIONS * sizeof(float)));
+    CHECK_CUDA(cudaMemcpy(d_points, h_points, N * DIMENSIONS * sizeof(float), cudaMemcpyHostToDevice));
 
     // allocate memory for signatures and bucket size on device global memory
-    cudaMalloc(&d_signatures, N * sizeof(unsigned long long int));
-    cudaMalloc(&d_bucket_size, N * sizeof(int));
-    cudaMemset(&d_bucket_size, 0, N * sizeof(int)); // set all buckets size to 0
+    CHECK_CUDA(cudaMalloc(&d_signatures, N * sizeof(unsigned long long int)));
+    CHECK_CUDA(cudaMalloc(&d_bucket_size, N * sizeof(int)));
+    CHECK_CUDA(cudaMemset(d_bucket_size, 0, N * sizeof(int))); // set all buckets size to 0
 
     allocateMatrixOnDevice(&d_buckets, N, BUCKET_SIZE);
 
     // upload hyperplanes to device constant memory
-    cudaMemcpyToSymbol(d_hyperplanes, h_hyperplanes, sizeof(float) * DIMENSIONS * N_HYPERPLANES);
+    CHECK_CUDA(cudaMemcpyToSymbol(d_hyperplanes, h_hyperplanes, sizeof(float) * DIMENSIONS * N_HYPERPLANES));
     // upload prime to constant memory
-    cudaMemcpyToSymbol(prime, &h_prime, sizeof(unsigned long long int));
+    CHECK_CUDA(cudaMemcpyToSymbol(prime, &h_prime, sizeof(unsigned long long int)));
 
-    int number_of_blocks = 1, threads_per_block = 4;
-    int n = 1 << 14;
+    // increase heap size to allow for dinamic allocation
+    size_t heapSize = 32* 1024 * 1024; // 32 MB
+    CHECK_CUDA(cudaDeviceSetLimit(cudaLimitMallocHeapSize, heapSize));
+
+    int number_of_blocks = 32, threads_per_block = 64;
+    int n = N;
 
     add_device<<<number_of_blocks, threads_per_block>>>(d_points, d_buckets, d_signatures, d_bucket_size, n);
-    cudaDeviceSynchronize();
-    printf("done\n");
+    
+    CHECK_CUDA(cudaDeviceSynchronize());
+
+    // free memory
+    CHECK_CUDA(cudaFree(d_points));
+    CHECK_CUDA(cudaFree(d_signatures));
+    CHECK_CUDA(cudaFree(d_bucket_size));
+    CHECK_CUDA(cudaFree(d_buckets));
+
+    printf("DONE\n");
+    fflush(stdout);
+    return 0;   
 }
