@@ -33,11 +33,6 @@ __device__ void resize(int **bucket, unsigned int current_size) {
     // allocate new bucket with twice the size as the old one (requires compute capability of 3.0 or above)
     int *new_bucket = (int*) malloc(current_size * 2 * sizeof(int));
 
-    // if (new_bucket == NULL) {
-    //     printf("Failed to allocate memory on the device\n");
-    //     return;
-    // }
-
     // copy data from old bucket to new bucket
     for(int i = 0; i < current_size; i++)
         new_bucket[i] = (*bucket)[i];
@@ -86,11 +81,11 @@ __global__ void add_device(float *points, int **buckets, unsigned long long int 
     }
 }
 
-
 /**
  * @brief search n points in the index
  * @param points is the set of points to search
  * @param buckets is the bucket indexes
+ * @param buckets_size is the size of each
  * @param result are the resulting indexes
  * @param n the number of points to search
  */
@@ -100,7 +95,10 @@ __global__ void search(float *points, int **buckets, unsigned int *bucket_size, 
 
     for (int i = tid; i < n; i += thread_count) {
         unsigned long long int signature = signature_gpu(points, i);
-        result[i] = hash_signature(signature);
+        unsigned int hamming_zero_bucket = hash_signature(signature);
+
+        if (bucket_size[hamming_zero_bucket] != 0)
+            result[i] = buckets[hamming_zero_bucket][0];
     }
 }
 
