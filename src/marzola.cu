@@ -3,7 +3,7 @@
 #include <random>
 #include <cuda_runtime.h>
 #include <sys/time.h>
-#include "point_gpu.hpp"
+// #include "point_gpu.hpp"
 #include "common.hpp"
 
 using namespace std;
@@ -41,10 +41,20 @@ __device__ void resize(int **bucket, unsigned int current_size) {
     *bucket = new_bucket; // bucket now points to the new bucket data
 }
 
+/**
+ * @brief check whether n is a power of two on CUDA device
+ * @param n the number to test
+ * @return true when n is a power of two, false otherwise
+ */
 __device__ inline bool is_power_of_two(unsigned int n) {
     return (n & (n - 1)) == 0;
 }
 
+/**
+ * @brief calculate the signature of a point
+ * @param points pointer to the array of all points stored in device global memory
+ * @param point_number the index of the point to calculate the signature of
+ */
 __device__ unsigned long long int signature_gpu(float* points, int point_number) {
     unsigned long long int sig = 0;
     unsigned int exponent = 0;
@@ -64,6 +74,15 @@ __device__ unsigned long long int signature_gpu(float* points, int point_number)
     return sig;
 }
 
+/**
+ * @brief add points to buckets
+ * @param points the vector of points to add
+ * @param buckets matrix of n buckets
+ * @param signatures array of signature, one for each point (uninitialized)
+ * @param curr_buket_used array of integers which indicate, for each bucket, how much is already occupied 
+ * @param n the number of points (and buckets)
+ * @note the number of buckets is the same as the number of buckets because that is what the cpp implementation of hash-based containers suggests
+ */
 __global__ void add_device(float *points, int **buckets, unsigned long long int *signatures, unsigned int *curr_bucket_used, int n) {
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
     int thread_count = gridDim.x * blockDim.x;
@@ -101,7 +120,11 @@ __global__ void search(float *points, int **buckets, unsigned int *bucket_size, 
             result[i] = buckets[hamming_zero_bucket][0];
     }
 }
-
+/**
+ * @brief generate nbits d-dimensional hyperplanes
+ * @param d dimensionality of the hyperplanes
+ * @param nbits
+ */
 float *generate_random_hyperplanes(int d, int nbits) {
     float *hyperplanes = new float[d * nbits];
 
@@ -117,8 +140,14 @@ float *generate_random_hyperplanes(int d, int nbits) {
     return hyperplanes;
 }
 
-float* generate_random_points() {
-    float * points = new float[N * DIMENSIONS];
+/**
+ * @brief generate N random points
+ * @param n number of points to generate
+ * @param dimensions dimensionality of the points to generate
+ * @return the randomly generated points
+ */
+float* generate_random_points(int n, int dimensions) {
+    float * points = new float[n * dimensions];
     
     srand(time(NULL));
     const float lower_bound = -1000.0;
@@ -127,13 +156,20 @@ float* generate_random_points() {
     #pragma omp parallel num_threads(4)
     {
         #pragma omp parallel for
-        for (int i = 0; i < N * DIMENSIONS; i++) {
+        for (int i = 0; i < n * dimensions; i++) {
             points[i] = lower_bound + (upper_bound - lower_bound) * ((float) rand() / RAND_MAX);
         }
     }
     return points;
 }
 
+/**
+ * @brief allocate an uninitilized matrix on device
+ * @param d_matrix pointer to matrix on device
+ * @param rows number of rows
+ * @param cols number of colums
+ * @param stream CudaStream to use to upload data
+ */
 void allocateMatrixOnDevice(int*** d_matrix, int rows, int cols, cudaStream_t stream) {
     int** h_row_ptrs = new int*[rows]; // Host array of pointers
 
@@ -163,11 +199,11 @@ void allocateMatrixOnDevice(int*** d_matrix, int rows, int cols, cudaStream_t st
 int main() {
     /* PARAMETERS */
     int number_of_blocks = 96, threads_per_block = 96;
-    int n = N;
+    int n = 1024;
 
     /* POINTERS TO HOST */
     float *h_hyperplanes = generate_random_hyperplanes(DIMENSIONS, N_HYPERPLANES); // host random hyperplanes
-    float* h_points = generate_random_points(); // host points
+    float* h_points = generate_random_points(n,DIMENSIONS); // host points
     const unsigned long long int h_prime = 0x9e3779b97f4a7c15ULL;
     /* POINTERS TO HOST */
 
@@ -188,19 +224,19 @@ int main() {
     CHECK_CUDA(cudaStreamCreate(&stream3));
 
     // Upload points to device global memory (asynchronously)
-    CHECK_CUDA(cudaMallocAsync((void**)&d_points, N * DIMENSIONS * sizeof(float), stream1));
-    CHECK_CUDA(cudaMemcpyAsync(d_points, h_points, N * DIMENSIONS * sizeof(float), cudaMemcpyHostToDevice, stream1));
+    CHECK_CUDA(cudaMallocAsync((void**)&d_points, n * DIMENSIONS * sizeof(float), stream1));
+    CHECK_CUDA(cudaMemcpyAsync(d_points, h_points, n * DIMENSIONS * sizeof(float), cudaMemcpyHostToDevice, stream1));
 
     // Allocate memory for signatures and bucket size on device global memory (asynchronously)
-    CHECK_CUDA(cudaMallocAsync(&d_signatures, N * sizeof(unsigned long long int), stream2));
-    CHECK_CUDA(cudaMallocAsync(&d_bucket_size, N * sizeof(int), stream2));
-    CHECK_CUDA(cudaMemsetAsync(d_bucket_size, 0, N * sizeof(int), stream2));  // Set all bucket sizes to 0 asynchronously
+    CHECK_CUDA(cudaMallocAsync(&d_signatures, n * sizeof(unsigned long long int), stream2));
+    CHECK_CUDA(cudaMallocAsync(&d_bucket_size, n * sizeof(int), stream2));
+    CHECK_CUDA(cudaMemsetAsync(d_bucket_size, 0, n * sizeof(int), stream2));  // Set all bucket sizes to 0 asynchronously
 
     // Upload hyperplanes and prime constant to device constant memory asynchronously
     CHECK_CUDA(cudaMemcpyToSymbolAsync(d_hyperplanes, h_hyperplanes, sizeof(float) * DIMENSIONS * N_HYPERPLANES, 0, cudaMemcpyHostToDevice, stream1));
     CHECK_CUDA(cudaMemcpyToSymbolAsync(prime, &h_prime, sizeof(unsigned long long int), 0, cudaMemcpyHostToDevice, stream1));
 
-    allocateMatrixOnDevice(&d_buckets, N, BUCKET_SIZE, stream3);
+    allocateMatrixOnDevice(&d_buckets, n, BUCKET_SIZE, stream3);
 
     // increase heap size to allow for dinamic allocation
     size_t heapSize = 1024 * 1024 * 1024; // 1 GB
