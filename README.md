@@ -3,7 +3,7 @@
 ## OPENMP Version
 compile with `g++ -fopenmp lsh.cpp point.cpp index.cpp index_CPU.cpp`
 
-execute with `./lsh [OPTION] [THREADS]`
+execute with `./a.out [OPTION] [THREADS]`
 
 `[OPTION]`: 
 
