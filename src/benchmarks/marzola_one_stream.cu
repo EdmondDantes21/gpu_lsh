@@ -204,7 +204,7 @@ int main() {
     size_t heapSize = 1024 * 1024 * 1024; // 1 GB
     CHECK_CUDA(cudaDeviceSetLimit(cudaLimitMallocHeapSize, heapSize));
 
-    int number_of_blocks = 96, threads_per_block = 96;
+    int number_of_blocks = 96, threads_per_block = 64;
     int n = N;
 
     add_device<<<number_of_blocks, threads_per_block, 0, stream>>>(d_points, d_buckets, d_signatures, d_bucket_size, n);
