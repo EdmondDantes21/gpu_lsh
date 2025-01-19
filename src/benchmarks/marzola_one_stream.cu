@@ -244,8 +244,6 @@ int main() {
 
     // Ensure all memory transfers and allocations complete before launching kernel
     CHECK_CUDA(cudaStreamSynchronize(stream));
-    CHECK_CUDA(cudaStreamSynchronize(stream));
-    CHECK_CUDA(cudaStreamSynchronize(stream));
 
     add_device<<<number_of_blocks, threads_per_block, 0, stream>>>(d_points, d_buckets, d_signatures, d_bucket_size, n);
 

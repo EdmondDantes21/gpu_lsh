@@ -4,7 +4,6 @@
 #include <cuda_runtime.h>
 #include <sys/time.h>
 #include <iomanip>
-#include "point_gpu.hpp"
 #include "common.hpp"
 
 using namespace std;
@@ -269,7 +268,7 @@ int main(int argc, char** argv) {
         float *h_search_points = generate_random_points(n / 4, DIMENSIONS);
         
         // Copy points to search from host to device
-        CHECK_CUDA(cudaMallocAsync(&d_search_points, n / 4 * sizeof(float), stream1));
+        CHECK_CUDA(cudaMallocAsync(&d_search_points, n / 4 * DIMENSIONS * sizeof(float), stream1));
         CHECK_CUDA(cudaMemcpyAsync(d_search_points, h_search_points, n / 4 * DIMENSIONS * sizeof(float), cudaMemcpyHostToDevice, stream1));
 
         // Allocate space for the result array in device
@@ -286,8 +285,9 @@ int main(int argc, char** argv) {
         cudaMemcpy(h_result, d_result, sizeof(unsigned int) * n / 4, cudaMemcpyDeviceToHost);
         
         gettimeofday(&s2, NULL);
-        long long int time_usec_search = ((end.tv_sec * 1000000 + end.tv_usec) - (start.tv_sec * 1000000 + start.tv_usec));
+        long long int time_usec_search = ((s2.tv_sec * 1000000 + s2.tv_usec) - (s1.tv_sec * 1000000 + s1.tv_usec));
         cout << "N = " << n << setw(20) << time_usec_search / 1000000.0 << endl;
+        
     }
     
     gettimeofday(&end, NULL);
