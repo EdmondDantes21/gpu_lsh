@@ -3,7 +3,8 @@
 #include <random>
 #include <cuda_runtime.h>
 #include <sys/time.h>
-// #include "point_gpu.hpp"
+#include <iomanip>
+#include "point_gpu.hpp"
 #include "common.hpp"
 
 using namespace std;
@@ -196,14 +197,16 @@ void allocateMatrixOnDevice(int*** d_matrix, int rows, int cols, cudaStream_t st
     delete[] h_row_ptrs; // Free host row pointers
 }
 
-int main() {
+int main(int argc, char** argv) {
     /* PARAMETERS */
-    int number_of_blocks = 96, threads_per_block = 96;
-    int n = 1024;
+    int n = atoi(argv[1]);                  // number of points
+    int number_of_blocks = atoi(argv[2]);   // number of CUDA blocks
+    int threads_per_block = atoi(argv[3]);  // threads per CUDA block
+    bool add = atoi(argv[4]);               // if true, benchmark add, otherwise benchmark insert
 
     /* POINTERS TO HOST */
     float *h_hyperplanes = generate_random_hyperplanes(DIMENSIONS, N_HYPERPLANES); // host random hyperplanes
-    float* h_points = generate_random_points(n,DIMENSIONS); // host points
+    float* h_points = generate_random_points(n, DIMENSIONS); // host points
     const unsigned long long int h_prime = 0x9e3779b97f4a7c15ULL;
     /* POINTERS TO HOST */
 
@@ -215,8 +218,12 @@ int main() {
     float *d_points;                        // points stored on the device
     /* POINTERS TO DEVICE*/
 
+    /* STARTING EXECUTION ON CUDA DEVICE */
     struct timeval start, end;
     gettimeofday(&start, NULL);
+
+    struct timeval mem_transfer_start, mem_transfer_end;
+    gettimeofday(&mem_transfer_start, NULL);
 
     /* ALLOCATE MEMORY ON DEVICE */
     CHECK_CUDA(cudaStreamCreate(&stream1));
@@ -247,14 +254,47 @@ int main() {
     CHECK_CUDA(cudaStreamSynchronize(stream2));
     CHECK_CUDA(cudaStreamSynchronize(stream3));
 
+    gettimeofday(&mem_transfer_end, NULL);
+        
     add_device<<<number_of_blocks, threads_per_block, 0, stream1>>>(d_points, d_buckets, d_signatures, d_bucket_size, n);
-
     cudaDeviceSynchronize();
+
+    if (!add) {
+        struct timeval s1,s2;
+        gettimeofday(&s1, NULL);
+        
+        unsigned int *d_result; 
+        unsigned int *h_result = new unsigned int [n / 4];
+        float *d_search_points;
+        float *h_search_points = generate_random_points(n / 4, DIMENSIONS);
+        
+        // Copy points to search from host to device
+        CHECK_CUDA(cudaMallocAsync(&d_search_points, n / 4 * sizeof(float), stream1));
+        CHECK_CUDA(cudaMemcpyAsync(d_search_points, h_search_points, n / 4 * DIMENSIONS * sizeof(float), cudaMemcpyHostToDevice, stream1));
+
+        // Allocate space for the result array in device
+        CHECK_CUDA(cudaMallocAsync(&d_result, n / 4 * sizeof(unsigned int), stream2));
+
+        // Ensure all memory transfers and allocations complete before launching kernel
+        CHECK_CUDA(cudaStreamSynchronize(stream1));
+        CHECK_CUDA(cudaStreamSynchronize(stream2));
+
+        search<<<number_of_blocks, threads_per_block, 0, stream1>>>(d_points, d_buckets, d_bucket_size, d_result, n / 4);
+        cudaDeviceSynchronize();
+
+        // Copy result back from device to host
+        cudaMemcpy(h_result, d_result, sizeof(unsigned int) * n / 4, cudaMemcpyDeviceToHost);
+        
+        gettimeofday(&s2, NULL);
+        long long int time_usec_search = ((end.tv_sec * 1000000 + end.tv_usec) - (start.tv_sec * 1000000 + start.tv_usec));
+        cout << "N = " << n << setw(20) << time_usec_search / 1000000.0 << endl;
+    }
     
     gettimeofday(&end, NULL);
     long long int time_usec = ((end.tv_sec * 1000000 + end.tv_usec) - (start.tv_sec * 1000000 + start.tv_usec));
-    cout << "execution time = " << time_usec / 1000000.0 << endl;
-
+    long long int time_usec_mem = ((mem_transfer_end.tv_sec * 1000000 + mem_transfer_end.tv_usec) - (mem_transfer_start.tv_sec * 1000000 + mem_transfer_start.tv_usec));
+    cout << n << setw(20) << time_usec / 1000000.0 << "(" <<  float(time_usec_mem) / float(time_usec) * 100.0 << "%)" << endl;
+    
     // Reset device
     CHECK_CUDA(cudaDeviceReset());
 
